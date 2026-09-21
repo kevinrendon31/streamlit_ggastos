@@ -15,10 +15,12 @@ st.title("💰 Rastreador de Gastos")
 CATEGORIAS_ESTANDAR = [
     "Alimentación",
     "Transporte",
-    "Vivienda / Servicios",
-    "Entretenimiento",
+    "Renta",
+    "Internet",
+    "Electricidad",
     "Salud y Cuidado Personal",
     "Educación",
+    "Comida fuera de casa",
     "Compras / Varios",
     "Otros",
 ]
