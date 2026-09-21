@@ -26,28 +26,31 @@ def load_data():
   """Carga los gastos desde Supabase."""
   try:
     response = (
-        supabase.table("expenses")
+        supabase.from_("expenses")
         .select("*")
         .order("date", desc=True)
         .execute()
     )
     data = response.data
     if data:
-      df = pd.DataFrame(data)
-      df = df.rename(
-          columns={
-              "date": "Fecha",
-              "category": "Categoría",
-              "amount": "Monto",
-              "note": "Nota",
-          }
-      )
-      return df[["Fecha", "Categoría", "Monto", "Nota"]]
+      return pd.DataFrame(data)
     else:
-      return pd.DataFrame(columns=["Fecha", "Categoría", "Monto", "Nota"])
+      return pd.DataFrame(
+          columns=["id", "date", "category", "amount", "note"]
+      )
   except Exception as e:
     st.error(f"Error al cargar datos: {e}")
-    return pd.DataFrame(columns=["Fecha", "Categoría", "Monto", "Nota"])
+    return pd.DataFrame(columns=["id", "date", "category", "amount", "note"])
+
+
+def delete_expense(expense_id):
+  """Elimina un gasto por su ID en Supabase."""
+  try:
+    supabase.from_("expenses").delete().eq("id", expense_id).execute()
+    st.success("Gasto eliminado correctamente.")
+    st.rerun()
+  except Exception as e:
+    st.error(f"Error al eliminar: {e}")
 
 
 df_expenses = load_data()
@@ -76,7 +79,7 @@ if submit_button:
     }
 
     try:
-      supabase.table("expenses").insert(new_expense).execute()
+      supabase.from_("expenses").insert(new_expense).execute()
       st.success("¡Gasto guardado con éxito!")
       st.rerun()
     except Exception as e:
@@ -84,20 +87,42 @@ if submit_button:
   else:
     st.warning("Por favor ingresa una categoría válida y un monto mayor a 0.")
 
-# Mostrar métricas y tablas
 st.divider()
 
-if not df_expenses.empty and "Monto" in df_expenses.columns:
-  df_expenses["Monto"] = pd.to_numeric(
-      df_expenses["Monto"], errors="coerce"
+if not df_expenses.empty:
+  # Asegurar que el monto sea numérico
+  df_expenses["amount"] = pd.to_numeric(
+      df_expenses["amount"], errors="coerce"
   ).fillna(0)
-  total_gasto = df_expenses["Monto"].sum()
+  total_gasto = df_expenses["amount"].sum()
+
   st.metric(label="Total Gasto Acumulado", value=f"${total_gasto:.2f}")
 
   st.subheader("📊 Gastos por Categoría")
-  cat_summary = df_expenses.groupby("Categoría")["Monto"].sum().reset_index()
+  cat_summary = (
+      df_expenses.groupby("category")["amount"]
+      .sum()
+      .reset_index()
+      .rename(columns={"category": "Categoría", "amount": "Monto ($)"})
+  )
   st.dataframe(cat_summary, hide_index=True, use_container_width=True)
 
+  st.subheader("📋 Historial de Gastos")
+
+  # Vista con opción de borrar cada registro
+  for _, row in df_expenses.iterrows():
+    c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 3, 1])
+    c1.write(f"**{row['date']}**")
+    c2.write(row["category"])
+    c3.write(f"${row['amount']:.2f}")
+    c4.write(row["note"] if row["note"] else "-")
+
+    # Botón para eliminar este registro específico
+    if c5.button("🗑️", key=f"del_{row['id']}"):
+      delete_expense(row["id"])
+
+else:
+  st.info("No hay gastos registrados aún.")
   st.subheader("📋 Historial de Gastos")
   st.dataframe(df_expenses, hide_index=True, use_container_width=True)
 else:
