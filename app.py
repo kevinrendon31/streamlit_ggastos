@@ -1,7 +1,7 @@
-import pandas as pd
 from datetime import datetime
+import pandas as pd
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+from supabase import create_client
 
 # Configuración de la página
 st.set_page_config(
@@ -10,20 +10,43 @@ st.set_page_config(
 
 st.title("💰 Rastreador de Gastos")
 
-# Conexión a Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Conexión a Supabase
+@st.cache_resource
+def init_supabase():
+  url = st.secrets["supabase"]["url"]
+  key = st.secrets["supabase"]["key"]
+  return create_client(url, key)
+
+
+supabase = init_supabase()
 
 
 def load_data():
-  """Carga los gastos desde Google Sheets."""
+  """Carga los gastos desde Supabase."""
   try:
-    data = conn.read(ttl="0d")  # Cargar datos siempre actualizados
-    return (
-        data
-        if not data.empty
-        else pd.DataFrame(columns=["Fecha", "Categoría", "Monto", "Nota"])
+    response = (
+        supabase.table("expenses")
+        .select("*")
+        .order("date", desc=True)
+        .execute()
     )
-  except Exception:
+    data = response.data
+    if data:
+      df = pd.DataFrame(data)
+      df = df.rename(
+          columns={
+              "date": "Fecha",
+              "category": "Categoría",
+              "amount": "Monto",
+              "note": "Nota",
+          }
+      )
+      return df[["Fecha", "Categoría", "Monto", "Nota"]]
+    else:
+      return pd.DataFrame(columns=["Fecha", "Categoría", "Monto", "Nota"])
+  except Exception as e:
+    st.error(f"Error al cargar datos: {e}")
     return pd.DataFrame(columns=["Fecha", "Categoría", "Monto", "Nota"])
 
 
@@ -45,20 +68,19 @@ with st.form("expense_form", clear_on_submit=True):
 
 if submit_button:
   if categoria.strip() and monto > 0:
-    new_row = pd.DataFrame([{
-        "Fecha": fecha.strftime("%Y-%m-%d"),
-        "Categoría": categoria.strip().capitalize(),
-        "Monto": monto,
-        "Nota": nota.strip(),
-    }])
+    new_expense = {
+        "date": fecha.strftime("%Y-%m-%d"),
+        "category": categoria.strip().capitalize(),
+        "amount": monto,
+        "note": nota.strip(),
+    }
 
-    # Combinar datos existentes con la nueva fila
-    updated_df = pd.concat([df_expenses, new_row], ignore_index=True)
-
-    # Guardar en Google Sheets usando .create() para evitar UnsupportedOperationError
-    conn.create(data=updated_df)
-    st.success("¡Gasto guardado con éxito en Google Sheets!")
-    st.rerun()
+    try:
+      supabase.table("expenses").insert(new_expense).execute()
+      st.success("¡Gasto guardado con éxito!")
+      st.rerun()
+    except Exception as e:
+      st.error(f"Error al guardar: {e}")
   else:
     st.warning("Por favor ingresa una categoría válida y un monto mayor a 0.")
 
