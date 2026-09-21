@@ -18,6 +18,7 @@ CATEGORIAS_ESTANDAR = [
     "Renta",
     "Internet",
     "Electricidad",
+    "Mascota",
     "Salud y Cuidado Personal",
     "Educación",
     "Comida fuera de casa",
