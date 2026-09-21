@@ -123,7 +123,3 @@ if not df_expenses.empty:
 
 else:
   st.info("No hay gastos registrados aún.")
-  st.subheader("📋 Historial de Gastos")
-  st.dataframe(df_expenses, hide_index=True, use_container_width=True)
-else:
-  st.info("No hay gastos registrados aún.")
