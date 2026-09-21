@@ -1,4 +1,5 @@
 from datetime import datetime
+import io
 import pandas as pd
 import streamlit as st
 from supabase import create_client
@@ -9,6 +10,18 @@ st.set_page_config(
 )
 
 st.title("💰 Rastreador de Gastos")
+
+# Lista estandarizada de categorías
+CATEGORIAS_ESTANDAR = [
+    "Alimentación",
+    "Transporte",
+    "Vivienda / Servicios",
+    "Entretenimiento",
+    "Salud y Cuidado Personal",
+    "Educación",
+    "Compras / Varios",
+    "Otros",
+]
 
 
 # Conexión a Supabase
@@ -61,7 +74,8 @@ with st.form("expense_form", clear_on_submit=True):
 
   with col1:
     fecha = st.date_input("Fecha", value=datetime.now().date())
-    categoria = st.text_input("Categoría", placeholder="Ej. Comida")
+    # Lista desplegable estandarizada
+    categoria = st.selectbox("Categoría", options=CATEGORIAS_ESTANDAR)
 
   with col2:
     monto = st.number_input("Monto ($)", min_value=0.0, step=0.5, format="%.2f")
@@ -70,10 +84,10 @@ with st.form("expense_form", clear_on_submit=True):
   submit_button = st.form_submit_button("Agregar Gasto")
 
 if submit_button:
-  if categoria.strip() and monto > 0:
+  if monto > 0:
     new_expense = {
         "date": fecha.strftime("%Y-%m-%d"),
-        "category": categoria.strip().capitalize(),
+        "category": categoria,
         "amount": monto,
         "note": nota.strip(),
     }
@@ -85,7 +99,7 @@ if submit_button:
     except Exception as e:
       st.error(f"Error al guardar: {e}")
   else:
-    st.warning("Por favor ingresa una categoría válida y un monto mayor a 0.")
+    st.warning("Por favor ingresa un monto mayor a 0.")
 
 st.divider()
 
@@ -97,6 +111,53 @@ if not df_expenses.empty:
   total_gasto = df_expenses["amount"].sum()
 
   st.metric(label="Total Gasto Acumulado", value=f"${total_gasto:.2f}")
+
+  # -------------------------------------------------------------
+  # Botón para Descargar Gastos (CSV y Excel)
+  # -------------------------------------------------------------
+  col_export1, col_export2 = st.columns(2)
+
+  # Exportar a CSV
+  csv_data = df_expenses.rename(
+      columns={
+          "date": "Fecha",
+          "category": "Categoría",
+          "amount": "Monto",
+          "note": "Nota",
+      }
+  )[["Fecha", "Categoría", "Monto", "Nota"]].to_csv(index=False)
+
+  col_export1.download_button(
+      label="📥 Descargar CSV",
+      data=csv_data,
+      file_name=f"gastos_{datetime.now().strftime('%Y%m%d')}.csv",
+      mime="text/csv",
+      use_container_width=True,
+  )
+
+  # Exportar a Excel
+  excel_buffer = io.BytesIO()
+  with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+    df_expenses.rename(
+        columns={
+            "date": "Fecha",
+            "category": "Categoría",
+            "amount": "Monto",
+            "note": "Nota",
+        }
+    )[["Fecha", "Categoría", "Monto", "Nota"]].to_excel(
+        writer, index=False, sheet_name="Gastos"
+    )
+
+  col_export2.download_button(
+      label="📊 Descargar Excel",
+      data=excel_buffer.getvalue(),
+      file_name=f"gastos_{datetime.now().strftime('%Y%m%d')}.xlsx",
+      mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      use_container_width=True,
+  )
+
+  st.divider()
 
   st.subheader("📊 Gastos por Categoría")
   cat_summary = (
@@ -117,7 +178,6 @@ if not df_expenses.empty:
     c3.write(f"${row['amount']:.2f}")
     c4.write(row["note"] if row["note"] else "-")
 
-    # Botón para eliminar este registro específico
     if c5.button("🗑️", key=f"del_{row['id']}"):
       delete_expense(row["id"])
 
