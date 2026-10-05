@@ -17,6 +17,7 @@ CATEGORIAS_ESTANDAR = [
     "Transporte",
     "Renta",
     "Internet",
+    "Rafael",
     "Electricidad",
     "Mascota",
     "Salud y Cuidado Personal",
